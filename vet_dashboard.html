@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🚑 Emergency Vet Portal</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        
+        /* Triage Color coding */
+        .status-RED { background-color: #ffcccc; color: #cc0000; font-weight: bold; }
+        .status-YELLOW { background-color: #fff4cc; color: #997a00; font-weight: bold; }
+        .status-GREEN { background-color: #ccffcc; color: #006600; }
+
+        .refresh-btn { 
+            padding: 10px 20px; background: #28a745; color: white; 
+            border: none; cursor: pointer; font-size: 16px; margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🚑 Incoming Pre-Vet Alerts</h1>
+    <button class="refresh-btn" onclick="fetchAlerts()">🔄 Refresh Dashboard</button>
+
+    <table id="alertTable">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Pet ID</th>
+                <th>Triage Level</th>
+                <th>AI Analysis</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+    <script>
+        async function fetchAlerts() {
+            try {
+                // Call your Python Backend
+                const response = await fetch('http://127.0.0.1:8000/get-active-alerts');
+                const alerts = await response.json();
+                
+                const tableBody = document.querySelector("#alertTable tbody");
+                tableBody.innerHTML = ""; // Clear old data
+
+                alerts.forEach(alert => {
+                    const row = document.createElement("tr");
+                    
+                    // Access columns by name (matches SQLite structure)
+                    // id, timestamp, pet_id, severity_level, ai_desc
+                    row.innerHTML = `
+                        <td>${alert.timestamp}</td>
+                        <td>${alert.pet_id}</td>
+                        <td class="status-${alert.severity_level}">${alert.severity_level}</td>
+                        <td>${alert.ai_desc}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                alert("Could not connect to Backend. Is main.py running?");
+            }
+        }
+
+        // Load data immediately when page opens
+        fetchAlerts();
+    </script>
+
+</body>
+</html>
