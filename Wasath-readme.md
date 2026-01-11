@@ -1,20 +1,104 @@
-# Driver Alert and Feedback System
+# Driver Alert & Feedback System
 
 ## Overview
 
-This project demonstrates an **end-to-end machine learning pipeline** that detects **vehicle driving behaviors** (such as _Cruising_, _Braking_, and _Lane Changes_) using **smartphone sensor data**.
+This project presents a **complete end-to-end journey** from **mobile-based data collection** to **machine learning–powered driving behavior prediction on mobile/frontend**.
 
-The system is designed so that:
+The system consists of **two tightly connected parts**:
 
-- Raw sensor data is collected in CSV format
-- The data is cleaned and converted into ML-friendly features
-- A machine learning model is trained in Python
-- The trained model is converted into JavaScript
-- Predictions can be run **on-device** (e.g., in a React Native app) without internet or servers
+1. **Data Collector Mobile App** – built using **Expo (React Native)** to collect real-world driving sensor data
+2. **Machine Learning Pipeline & Model** – built in **Python**, then exported to **JavaScript** for on-device prediction
+
+Together, these components enable a fully offline, privacy-friendly system that detects driving behaviors such as:
+
+- Cruising
+- Braking
+- Lane changes
 
 ---
 
-## Project Structure
+## System Journey (High-Level)
+
+```
+Mobile App (Sensor Data Collection)
+        ↓
+Raw CSV Sensor Data
+        ↓
+Data Preprocessing & Feature Engineering
+        ↓
+Machine Learning Model Training (Python)
+        ↓
+Model Conversion to JavaScript
+        ↓
+Mobile / Frontend Real-Time Prediction
+```
+
+This README explains **each step of this journey in order**, from start to finish.
+
+---
+
+## PART 1 - Data Collector Mobile App
+
+### Purpose
+
+The Data Collector App is responsible for **capturing real driving data** using smartphone sensors.
+
+It records:
+
+- Accelerometer data (`acc_x`, `acc_y`, `acc_z`)
+- GPS speed
+- User-selected driving labels (via buttons)
+
+This app ensures that **ground-truth labeled data** is collected in real-world conditions.
+
+---
+
+### Technology Used
+
+- **Expo (React Native)**
+- JavaScript / TypeScript
+- Smartphone sensors (GPS, Accelerometer)
+
+---
+
+### How to Run the Data Collector App
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Start the app:
+
+```bash
+npx expo start
+```
+
+3. Open the app using:
+
+- Expo Go (Android)
+- Android Emulator
+- Physical device
+
+---
+
+### What the App Produces
+
+The app exports **CSV files** containing rows like:
+
+```
+acc_x,acc_y,acc_z,gps_speed,label
+0.01,0.98,0.05,5.4,Cruising
+```
+
+These CSV files are the **starting point** for the machine learning pipeline.
+
+---
+
+## PART 2 - Machine Learning Pipeline
+
+### Project Structure
 
 ```
 ├── process_data.py
@@ -22,84 +106,66 @@ The system is designed so that:
 ├── ambulance_model.js
 ```
 
-Each file plays a **specific role** in the pipeline and depends on the previous step.
+Each file represents a **distinct stage** in the ML pipeline.
 
 ---
 
-## Step-by-Step: How to Prepare This Project (From Zero)
+## STEP 1 - Raw CSV Sensor Data
 
-This section explains **exactly what to do**, even if you have no prior experience.
+- Collected from the mobile app
+- Contains noisy, raw sensor streams
+- Not suitable for direct ML training
 
----
-
-### STEP 1 — Prepare Raw Sensor Data
-
-Start with **CSV files** that contain smartphone sensor readings collected during vehicle movement.
-
-Each CSV file should include:
-
-- Accelerometer data: `acc_x`, `acc_y`, `acc_z`
-- GPS speed: `gps_speed`
-- Driving label: `label` (button pressed by the passenger)
-
-Example row:
-
-```
-acc_x,acc_y,acc_z,gps_speed,label
-0.01,0.98,0.05,5.4,Cruising
-```
-
-These CSV files are my **input data**. Place them in the same directory as `process_data.py`.
+These CSV files are placed in the same directory as `process_data.py`.
 
 ---
 
-### STEP 2 — Run `process_data.py`
+## STEP 2 - Data Preprocessing (`process_data.py`)
 
-This is the **most important file** in the project.
+This is the **core pipeline script**.
 
-When you run:
+When executed:
 
-```
+```bash
 python process_data.py
 ```
 
-The script automatically performs **three major tasks**:
+It performs:
 
-#### 2.1 Data Preprocessing
+### 2.1 Data Cleaning
 
-- Reads all CSV files
-- Cleans missing or noisy sensor values
-- Converts accelerometer data into magnitude
+- Handles missing GPS values
+- Reduces sensor noise
+- Converts 3-axis acceleration into magnitude
 - Calculates jerk (change in acceleration)
-- Uses a sliding window technique to group data into 1-second samples
 
-#### 2.2 Feature Engineering
+### 2.2 Sliding Window Processing
 
-For each window, it extracts numeric features such as:
+- Groups data into \~1 second windows
+- Ensures fixed-size ML samples
+- Removes incomplete windows
+
+### 2.3 Feature Engineering
+
+For each window, it extracts:
 
 - Average speed
 - Maximum force
-- Standard deviation of force
 - Minimum force
+- Force standard deviation
 - Average jerk
 
-Each window is also assigned a label based on the most frequent value.
-
-#### 2.3 Output of Preprocessing
-
-After preprocessing, the script **automatically generates**:
-
-**`training_data.json`**
-
-I do **not** create or edit this file manually.
+Each window is assigned a label using **majority voting**.
 
 ---
 
-### STEP 3 — Understand `training_data.json`
+## STEP 3 - `training_data.json`
 
-`training_data.json` is the **clean, machine-learning-ready dataset**.
+After preprocessing, the script automatically generates:
 
-Each entry represents **one sliding window (≈1 second)** of driving behavior:
+``
+
+Example entry:
 
 ```json
 {
@@ -112,65 +178,81 @@ Each entry represents **one sliding window (≈1 second)** of driving behavior:
 }
 ```
 
-Important points:
+### Key Properties
 
+- ML-ready
+- No NaN values
 - No raw sensor streams
-- No missing (NaN) values
-- Only numeric features + label
-- Used directly for ML training
+- Never edited manually
+
+This file acts as the **bridge between data collection and model training**.
 
 ---
 
-### STEP 4 — Model Training (Still Inside `process_data.py`)
+## STEP 4 - Model Training (Python)
 
-After creating `training_data.json`, the same script:
+Still inside `process_data.py`, the pipeline:
 
-- Loads the JSON file
+- Loads `training_data.json`
 - Splits data into training (80%) and testing (20%)
 - Trains a **Random Forest Classifier**
 - Handles class imbalance using `class_weight='balanced'`
-- Evaluates the model using accuracy, classification report, and confusion matrix
+- Evaluates performance using:
+  - Accuracy
+  - Classification report
+  - Confusion matrix
 
 The trained model is saved internally as a `.pkl` file.
 
 ---
 
-### STEP 5 — Model Conversion to JavaScript
+## STEP 5 - Model Conversion to JavaScript
 
-Finally, `process_data.py` converts the trained Python model into **pure JavaScript logic**.
+The trained Python model is converted into **pure JavaScript logic**.
 
 This produces:
 
-**`ambulance_model.js`**
+``
 
-This file:
+### Why JavaScript?
 
-- Contains only `if–else` rules
-- Does not require Python or ML libraries
-- Can be used directly in frontend or mobile apps
+- Works inside React Native
+- No backend required
+- Fully offline inference
+- Preserves user privacy
+
+The file contains a large `if–else` decision function generated from the trained Random Forest.
 
 ---
 
-### STEP 6 — Use `ambulance_model.js` in a Frontend App
+## STEP 6 - Frontend / Mobile Prediction
 
-In a JavaScript or React Native project:
+In a mobile or frontend app:
 
 ```js
 import score from "./ambulance_model";
 
-const features = [avg_speed, max_force, std_force, min_force, avg_jerk];
+const features = [
+  avg_speed,
+  max_force,
+  std_force,
+  min_force,
+  avg_jerk
+];
 
 const prediction = score(features);
 ```
 
-The model returns a prediction for the current driving behavior.
+The model instantly returns the predicted driving behavior.
 
 ---
 
-## How the Files Work Together
+## End-to-End File Interaction
 
 ```
-Raw CSV Sensor Data
+Data Collector App
+        ↓
+Raw CSV Files
         ↓
 process_data.py
         ↓
@@ -183,32 +265,33 @@ ambulance_model.js
 Mobile / Frontend Prediction
 ```
 
-Each file exists **because of the previous step**.
-
 ---
 
-## File Responsibilities Summary
+## Responsibilities Summary
 
-| File                 | Responsibility                              |
-| -------------------- | ------------------------------------------- |
-| `process_data.py`    | Preprocessing, training, evaluation, export |
-| `training_data.json` | Cleaned ML dataset                          |
-| `ambulance_model.js` | On-device prediction model                  |
+| Component            | Responsibility                                  |
+| -------------------- | ----------------------------------------------- |
+| Data Collector App   | Collect labeled sensor data                     |
+| `process_data.py`    | Cleaning, feature engineering, training, export |
+| `training_data.json` | Clean ML dataset                                |
+| `ambulance_model.js` | On-device prediction logic                      |
 
 ---
 
 ## Key Takeaway
 
-> `process_data.py` creates knowledge, `training_data.json` stores knowledge, and `ambulance_model.js` applies knowledge in real time.
+> This system demonstrates a complete real-world pipeline where data is collected on a mobile device, transformed into knowledge using machine learning, and deployed back onto mobile/frontend platforms for real-time, offline decision-making.
 
 ---
 
 ## Final Notes
 
-- Do not manually edit `training_data.json` or `ambulance_model.js`
-- Always rerun `process_data.py` if new CSV data is added
-- The pipeline is fully offline and privacy-friendly
+- CSV data comes **only** from the mobile app
+- `training_data.json` and `ambulance_model.js` are **auto-generated**
+- Any new data requires rerunning `process_data.py`
+- The system is modular, explainable, and privacy-friendly
 
 ---
 
-🎓 This README explains **how the system is prepared, how it works, and how it is used**, step by step.
+This README documents the **full journey from data collection to mobile prediction**, end to end.
+
