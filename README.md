@@ -9,19 +9,6 @@ Detects if someone is getting drowsy by monitoring their eyes. When eyes stay cl
 pip install opencv-python mediapipe numpy
 ```
 
-## Quick Start
-```python
-from drowsiness_detector import test_drowsiness_on_images
-
-# Add your image paths
-images = ["photo1.jpg", "photo2.jpg", "photo3.jpg"]
-
-# Run detection
-results, status = test_drowsiness_on_images(images)
-
-# Check results
-print(f"Status: {status}")
-```
 
 ## How It Works
 The system uses **Eye Aspect Ratio (EAR)** to measure how open your eyes are:
