@@ -1,5 +1,7 @@
 # Driver Alert & Feedback System
 
+**Developer**: IT22320582 – Jayasundara D.W\.S
+
 ## Overview
 
 This project presents a **complete end-to-end journey** from **mobile-based data collection** to **machine learning–powered driving behavior prediction on mobile/frontend**.
@@ -14,6 +16,18 @@ Together, these components enable a fully offline, privacy-friendly system that 
 - Cruising
 - Braking
 - Lane changes
+
+---
+
+## Problem Statement
+
+In congested urban areas such as Sri Lanka, ambulances often face serious delays due to traffic congestion and ineffective driver alert mechanisms. Traditional alerts like sirens and flashing lights are frequently ignored, with only about 60–70% driver compliance. Existing digital and IoT-based solutions suffer from high latency, lack personalization, and operate mainly as one-way systems without real-time feedback. Additionally, the absence of locally collected driving-behavior datasets limits the development of accurate, context-aware models. Therefore, there is a need for an intelligent, adaptive system that can better understand driving behavior and support more effective ambulance movement in urban traffic.
+
+---
+
+## Novelty of the Proposed System
+
+The novelty of this system lies in its **mobile-centric, end-to-end approach** that connects real-world data collection with on-device machine learning prediction. Unlike traditional infrastructure-heavy solutions, this project uses a custom mobile app to collect local driving data, applies machine learning to understand individual driver behavior/vehicle movements, send personalized alerts based on that individual driver behavior/vehicle movements deploys the trained model directly on mobile/frontend platforms as JavaScript. The system is fully offline, privacy-friendly, low-cost, and designed to serve as a foundation for future adaptive driver alerts and feedback mechanisms, making it suitable for real-world deployment in developing urban environments.
 
 ---
 
@@ -163,7 +177,7 @@ Each window is assigned a label using **majority voting**.
 
 After preprocessing, the script automatically generates:
 
-``
+\`\`
 
 Example entry:
 
@@ -212,7 +226,7 @@ The trained Python model is converted into **pure JavaScript logic**.
 
 This produces:
 
-``
+\`\`
 
 ### Why JavaScript?
 
@@ -290,6 +304,12 @@ Mobile / Frontend Prediction
 - `training_data.json` and `ambulance_model.js` are **auto-generated**
 - Any new data requires rerunning `process_data.py`
 - The system is modular, explainable, and privacy-friendly
+
+## **References**
+
+- Y. Chen et al., "Emergency vehicle priority at intersections using RFID and centralized control," IEEE Trans. Veh. Technol., vol. 69, no. 12, pp. 14567-14578, Dec. 2020.
+- V. K. Saini et al., "GSM and GPS based vehicle location and tracking system," in Proc. Int. Conf. Recent Adv. Eng. Technol., New Delhi, India, 2019, pp. 1-5.
+- Y. Wang et al., "Predicting driver yielding behavior to emergency vehicles using machine learning," Transp. Res. Part C: Emerg. Technol., vol. 128, p. 103198, 2021.
 
 ---
 
