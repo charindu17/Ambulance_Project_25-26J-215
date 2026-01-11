@@ -160,6 +160,7 @@ This drowsiness detection system is part of a comprehensive **Stress and Fatigue
 - **AffectNet**: Facial expression recognition dataset
 
 ### System Architecture
+<img width="393" height="294" alt="image" src="https://github.com/user-attachments/assets/3917a14b-978b-4f8e-8202-d88ccc02145e" />
 
 
 ---
