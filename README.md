@@ -42,7 +42,8 @@ Computer vision-based drowsiness detection system utilizing advanced biometric a
 
 **Technology Stack:** Python, OpenCV, MediaPipe, MobileNetV2
 
-📚 [View Documentation](#)
+📚 Documentation:
+🔗 https://github.com/charindu17/Ambulance_Project_25-26J-215/blob/dev-charindu/README.md
 
 ---
 
@@ -59,8 +60,8 @@ Smartphone-based intelligent driving behavior monitoring and classification syst
 - Proximity alerts to nearby vehicles during ambulance approach
 
 **Technology Stack:** Random Forest, TensorFlow.js, React
-
-📚 [View Documentation](#)
+📚 Documentation:
+🔗 https://github.com/charindu17/Ambulance_Project_25-26J-215/blob/dev-wasath/Wasath-readme.md
 
 ---
 
@@ -79,7 +80,8 @@ Secure, instant-access emergency medical information system with predictive anal
 
 **Technology Stack:** MERN Stack (MongoDB, Express, React, Node.js), LSTM, QR Security Protocol
 
-📚 [View Documentation](#)
+📚 Documentation:
+🔗 https://github.com/charindu17/Ambulance_Project_25-26J-215/blob/dev-Dileeshara/README.md
 
 ---
 
@@ -97,7 +99,8 @@ Wearable-based pet health monitoring with intelligent emergency detection.
 
 **Technology Stack:** Isolation Forest, Autoencoders
 
-📚 [View Documentation](#)
+📚 Documentation:
+🔗 https://github.com/charindu17/Ambulance_Project_25-26J-215/blob/dev-ashen/Ashen-README.md
 
 ---
 
