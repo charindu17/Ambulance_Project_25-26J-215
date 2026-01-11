@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ambulance AI Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            text-align: center;
+        }
+        .card {
+            display: inline-block;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 12px;
+            background: #1e293b;
+            width: 300px;
+        }
+        .high { color: red; }
+        .low { color: lime; }
+    </style>
+</head>
+
+<body>
+    <h1>🚑 Ambulance AI Monitoring</h1>
+
+    <div class="card">
+        <h2>Driver Fatigue</h2>
+        <p id="fatigueScore">Score: --</p>
+        <h3 id="fatigueLevel">Level: --</h3>
+    </div>
+
+    <div class="card">
+        <h2>Paramedic Stress</h2>
+        <h3 id="stressLevel">Level: --</h3>
+    </div>
+
+<script>
+    const socket = io();
+
+    socket.emit("start");
+
+    socket.on("update", data => {
+        document.getElementById("fatigueScore").innerText =
+            "Score: " + data.fatigue_score;
+
+        document.getElementById("fatigueLevel").innerText =
+            "Level: " + data.fatigue_level;
+
+        document.getElementById("fatigueLevel").className =
+            data.fatigue_level === "HIGH" ? "high" : "low";
+
+        document.getElementById("stressLevel").innerText =
+            "Level: " + data.stress_level;
+
+        document.getElementById("stressLevel").className =
+            data.stress_level === "HIGH" ? "high" : "low";
+    });
+</script>
+
+</body>
+</html>
