@@ -1,4 +1,4 @@
-# Drowsiness Detection System
+# Stress and Fatigue Detection System
 
 > **Student ID**: IT22366290  
 > A real-time computer vision system for detecting driver fatigue and drowsiness
@@ -178,8 +178,7 @@ This drowsiness detection system is part of a comprehensive **Stress and Fatigue
 ---
 
 ## 🤝 Contributing
-
-This is a student project (IT22366290). For questions or collaboration:
+For questions or collaboration:
 
 1. Document any issues you encounter
 2. Suggest improvements via pull requests
