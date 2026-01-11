@@ -1,6 +1,6 @@
 # Stress and Fatigue Detection System
 
-> **Student ID**: IT22366290  
+> **Student ID**: IT22366290  - Liyanage C D
 > A real-time computer vision system for detecting driver fatigue and drowsiness
 
 
