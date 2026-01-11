@@ -1,4 +1,6 @@
-# Eye Aspect Ratio (EAR) Drowsiness Detection System
+# Stress and Fatique Detection
+# IT22366290
+
 
 ## Overview
 
