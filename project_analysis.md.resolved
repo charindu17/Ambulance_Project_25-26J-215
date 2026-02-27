@@ -1,0 +1,504 @@
+# 🚑 Ambulance Emergency Notification System — Full Project Analysis
+
+> This document explains your part of the group project: **the ambulance emergency notification system**. It covers every file, what it does, how it works, and how everything connects together.
+
+---
+
+## 📖 1. Overall Project Flow (Big Picture)
+
+Think of this project like an **emergency radio system for the road**:
+
+1. A **driver** logs in to the app with their ambulance details.
+2. The driver sets a **start point** and **destination**, then begins the journey.
+3. The app **registers this trip** in the backend database and starts **broadcasting the ambulance's live GPS position** to a real-time channel (MQTT — like a walkie-talkie frequency).
+4. Nearby **patients/users** who are on that route automatically receive a **push notification** on their phones saying "Ambulance Approaching!"
+5. The notification has two action buttons: **"I'm Aware"** and **"Moving Aside"** — users press one to acknowledge.
+6. That acknowledgment is **sent back to the backend** and saved, so the system knows who responded.
+
+The project has two sides:
+- **Backend** — Python (Flask), runs on a server, manages the database, sends push notifications via Firebase.
+- **Frontend** — Flutter (Dart), the mobile app used by both drivers and patients.
+
+---
+
+## 🗄️ 2. My Backend Files
+
+### [Backend/api.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/api.py) — The Main Server Entry Point
+**Think of it as:** The front door of the building — everything enters here.
+
+This is where the Flask web server is created and started. It:
+- Creates the app
+- Enables CORS (allows the mobile app to talk to the server)
+- **Registers all route blueprints** — including your three: `driver_bp`, `navigation_bp`, `notification_bp`
+- Creates all database tables automatically on startup
+- Runs on port `5001`
+
+```
+Registers → auth, doctor, patient, prediction, driver, ambulance_navigation, notification
+```
+
+**Interacts with:** All route files and `models/__init__.py` (the database).
+
+---
+
+### [Backend/models/models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) — The Database Blueprints
+**Think of it as:** The filing cabinet that decides what information gets stored and how.
+
+This file defines all the **database tables** as Python classes. The ones relevant to your part:
+
+| Table | Purpose |
+|---|---|
+| [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) | Stores driver info: name, email, vehicle number, NIC, staff ID |
+| [AmbulanceNavigation](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#106-137) | Stores each ambulance trip: driver, start/end GPS coordinates, status (PENDING → STARTED → COMPLETED) |
+| [NotificationAcknowledgment](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#189-209) | Records when a patient presses "I'm Aware" or "Moving Aside" |
+
+The [Patient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#27-59) model (also here, your teammates' main model) stores an important field for you: `fcm_token` — this is the device address Firebase uses to send push notifications to a specific phone.
+
+**Interacts with:** All route files that read from or write to these tables.
+
+---
+
+### [Backend/routes/auth.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/auth.py) — Registration & Login
+**Think of it as:** The reception desk — where drivers sign up and log in.
+
+This file contains API endpoints for:
+- **`POST /auth/driver/register`** — Creates a new driver account (name, email, password, vehicle number, NIC)
+- **`POST /auth/driver/login`** — Verifies driver credentials and returns their info
+
+It also handles doctor and patient auth (your teammates' parts).
+
+**Interacts with:** [models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) (reads/writes [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) table), `utils/helpers.py` (hashes passwords securely).
+
+---
+
+### [Backend/routes/driver.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/driver.py) — Managing Driver Profiles
+**Think of it as:** The HR system for drivers — view, update, or remove driver records.
+
+Endpoints provided:
+| Endpoint | Action |
+|---|---|
+| `GET /drivers` | List all drivers |
+| `GET /drivers/<id>` | Get one driver's details |
+| `PUT /drivers/<id>` | Update driver info (name, vehicle #, password, NIC) |
+| `DELETE /drivers/<id>` | Remove a driver |
+
+**Interacts with:** [models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) (reads/writes [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) table).
+
+---
+
+### [Backend/routes/ambulance_navigation.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/ambulance_navigation.py) — Managing Ambulance Trips
+**Think of it as:** The trip logbook — records every ambulance journey.
+
+Endpoints provided:
+| Endpoint | Action |
+|---|---|
+| `POST /ambulance-navigation` | Create a new trip (start/end GPS, driver ID, vehicle #) |
+| `GET /ambulance-navigation/<id>` | Get trip details |
+| `GET /ambulance-navigation/driver/<driver_id>` | All trips by a driver |
+| `PUT /ambulance-navigation/<id>` | Update destination |
+| `PATCH /ambulance-navigation/<id>/status` | Change trip status: PENDING → STARTED → COMPLETED |
+| `DELETE /ambulance-navigation/<id>` | Delete a trip record |
+
+**Interacts with:** [models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) (reads/writes [AmbulanceNavigation](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#106-137) and [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) tables).
+
+---
+
+### [Backend/routes/notification.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/notification.py) — Sending Notifications & Recording Responses
+**Think of it as:** The broadcast room + feedback collector.
+
+This is the most critical backend file for your system. It has 4 endpoints:
+
+**1. `POST /notifications/send`**
+Sends a Firebase push notification to **specific patients** by ID.
+- Looks up their FCM tokens from the database
+- Calls [NotificationService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart#187-676) to fire the notification via Firebase
+- Returns success/failure counts
+
+**2. `POST /notifications/send-all`**
+Same as above, but sends to **all patients** with a registered FCM token.
+
+**3. `POST /notifications/acknowledge`**
+Records a patient's response to the ambulance notification:
+- `SEEN` — they saw it
+- `AWARE` — they're aware
+- `MOVING_ASIDE` — they're getting out of the way
+- Creates or updates a [NotificationAcknowledgment](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#189-209) record in the database
+
+**4. `GET /notifications/navigation/<navigation_id>/acknowledgments`**
+Retrieves all acknowledgments for a specific ambulance trip (who responded and how).
+
+**Interacts with:** [models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) (Patient, AmbulanceNavigation, NotificationAcknowledgment), `services/notification_service.py` (Firebase FCM sending).
+
+---
+
+### [Backend/serviceAccountKey.json](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/serviceAccountKey.json) — Firebase Admin Credentials
+**Think of it as:** The official key card that lets the server send push notifications on behalf of your Firebase project.
+
+This JSON file contains private credentials for the Firebase Admin SDK. The backend uses it to authenticate with Google's Firebase service and send push notifications to devices. **This file is sensitive and should never be committed to public version control.**
+
+---
+
+## 📱 3. My Frontend Files (Flutter / Dart)
+
+### Models
+
+#### [lib/models/driver_model.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/driver_model.dart) — Driver Data Shape
+**Think of it as:** A template/form that describes what a Driver looks like in the app.
+
+Defines the [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) class with fields: `id`, `name`, `email`, `vehicleNumber`, `nic`, `staffId`, `createdAt`. Has `fromMap()` (converts JSON from server into a Dart object) and [toMap()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/ambulance_navigation_model.dart#15-18) (converts back to JSON to send to server).
+
+#### [lib/models/ambulance_navigation_model.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/ambulance_navigation_model.dart) — Navigation Data Shape
+Defines two classes:
+- [LocationPoint](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/ambulance_navigation_model.dart#1-19) — a GPS coordinate (lat + lng)
+- [AmbulanceNavigation](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#106-137) — a full trip record with driverId, startLocation, endLocation, vehicleNumber, status, createdAt
+
+These are used throughout the app to handle trip data cleanly.
+
+---
+
+### Services
+
+#### [lib/services/api_client.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart) — The HTTP Connection Manager
+**Think of it as:** The phone line between the app and the backend server.
+
+All communication with the backend goes through this single class. It:
+- Has the **base URL** of the backend server (via ngrok in this case)
+- Provides methods: [get()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#33-44), [post()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#63-78), [put()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#80-95), [patch()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#46-61), [delete()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#16-27), [uploadFile()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#97-129)
+- Handles errors (no internet, timeout, bad format)
+- Sets JSON headers automatically
+
+Every service that calls the backend uses [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170).
+
+---
+
+#### [lib/services/driver_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart) — Driver API Calls
+**Think of it as:** The driver's personal assistant for talking to the backend.
+
+Wraps [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170) to provide clean, typed methods:
+- [register()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#11-33) → calls `/auth/driver/register`
+- [login()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#34-45) → calls `/auth/driver/login`
+- [getDriver(id)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#48-52) → fetches one driver
+- [getAllDrivers()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#53-57) → fetches all drivers
+- [updateDriver(id, ...)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#58-76) → updates driver info
+- [deleteDriver(id)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart#77-81) → removes driver
+
+**Interacts with:** [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170), [Driver](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#82-104) model.
+
+---
+
+#### [lib/services/ambulance_navigation_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart) — Navigation API Calls
+**Think of it as:** The trip planner — creates and manages ambulance trips.
+
+Provides methods:
+- [createNavigation(...)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#12-32) → `POST /ambulance-navigation`
+- [getNavigation(id)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#33-37) → `GET /ambulance-navigation/<id>`
+- [getDriverNavigations(driverId)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#38-44) → all trips by a driver
+- [updateNavigation(...)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#45-62) → update destination
+- [updateStatus(id, status)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#63-73) → change trip status
+- [deleteNavigation(id)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart#74-80) → remove trip
+
+**Interacts with:** [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170), [AmbulanceNavigation](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#106-137) model.
+
+---
+
+#### [lib/services/mqtt_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart) — Real-Time Communication
+**Think of it as:** A walkie-talkie system — sends and receives real-time messages.
+
+MQTT is a lightweight messaging protocol perfect for IoT and real-time location tracking. This service:
+- Connects to a **public MQTT broker** (`test.mosquitto.org`)
+- Has [connect()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart#25-62), [disconnect()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart#113-118), [publish(topic, message)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart#83-91), [subscribe(topic)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart#92-107) methods
+- Is a **singleton** — only one instance exists throughout the app lifetime
+- Auto-reconnects if the connection drops
+
+**Used by:** [LocationPublisherService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/location_publisher_service.dart#9-152) (driver sends location) and patient-side code that listens for ambulance locations.
+
+---
+
+#### [lib/services/location_publisher_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/location_publisher_service.dart) — Live GPS Broadcasting (Driver Side)
+**Think of it as:** The ambulance's GPS tracker that constantly broadcasts its position.
+
+When the driver starts a trip, this service:
+1. Checks GPS permissions
+2. Connects to MQTT
+3. **Publishes a discovery message** to `ambulance/active` topic: `ADD:12,ABC-001,6.9271,79.8612,6.9015,79.8611` (so patients know this ambulance is active)
+4. **Streams GPS position** every time the ambulance moves 10+ meters, publishing to `ambulance/location/<navigationId>` topic: `6.9271,79.8612`
+
+When the trip ends:
+- Publishes `REMOVE:12` to the discovery topic
+- Stops GPS stream
+- Disconnects from MQTT
+
+**Interacts with:** [MqttService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart#8-125), [AmbulanceNavigation](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py#106-137) model, system GPS (geolocator package).
+
+---
+
+#### [lib/services/notification_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart) — Firebase Push Notification Handler (Patient Side)
+**Think of it as:** The patient's notification system — receives and displays emergency alerts.
+
+This is the most complex frontend service. It:
+- Initializes **Firebase Cloud Messaging (FCM)**
+- **Requests notification permission** from the user
+- Gets the device's **FCM token** and saves it to the backend (so the server knows how to reach this phone)
+- Handles notifications in **3 scenarios**:
+  - **Foreground** (app is open): Shows a local notification with action buttons
+  - **Background** (app is running but not visible): Shows a system notification with "I'm Aware" and "Moving Aside" buttons
+  - **Terminated** (app was closed): Shows a system notification, relaunches app when tapped
+- Detects **ambulance alerts** (`AMBULANCE_ALERT` type) and triggers special callbacks vs generic ones
+- When a user taps an action button, **calls the acknowledgment API** automatically
+
+Also defines the [AmbulanceAlertData](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart#678-696) data class.
+
+**Interacts with:** [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170), Firebase Messaging, `FlutterLocalNotifications`, [NotificationApiService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#5-150).
+
+---
+
+#### [lib/services/notification_api_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart) — Notification-Related API Calls (Patient)
+**Think of it as:** The bridge that sends user responses back to the server.
+
+Provides typed methods:
+- [acknowledgeNotification(navigationId, patientId, type)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#10-47) → `POST /notifications/acknowledge`
+- [getNavigationAcknowledgments(navigationId)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#48-72) → `GET /notifications/navigation/<id>/acknowledgments`
+- [sendAmbulanceAlert(patientIds, navigationId, vehicleNumber)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#73-115) → `POST /notifications/send-ambulance-alert`
+- [getAllPatients()](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#116-149) → `GET /patient` (for the driver to get patient list to alert)
+
+**Interacts with:** [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170).
+
+---
+
+#### [lib/services/push_notification_sender_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/push_notification_sender_service.dart) — Notification Sender (Driver Side)
+**Think of it as:** The alert dispatcher — the driver's app triggers notifications through this.
+
+When the driver starts a journey, this service fires the push notification:
+- [sendToPatients(patientIds, title, body, data)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/push_notification_sender_service.dart#11-43) → `POST /notifications/send`
+- [sendToAllPatients(title, body, data)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/push_notification_sender_service.dart#44-74) → `POST /notifications/send-all`
+- [sendAmbulanceArrivingNotification(vehicleNumber)](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/push_notification_sender_service.dart#75-95) — a convenience method that sends a pre-formatted "Ambulance On The Way!" message to all patients
+
+**Interacts with:** [ApiClient](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart#6-170).
+
+---
+
+#### [lib/services/services.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/services.dart) — The Central Export Hub
+**Think of it as:** A table of contents for all services.
+
+This file simply re-exports all service files so the rest of the app can import everything with one line:
+```dart
+import 'services/services.dart';
+```
+It includes all your services: `driver_service`, `ambulance_navigation_service`, `mqtt_service`, `location_publisher_service`, `notification_service`, `push_notification_sender_service`, `notification_api_service`.
+
+---
+
+### Widgets
+
+#### [lib/widgets/ambulance_alert_dialog.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/ambulance_alert_dialog.dart) — The Emergency Alert Pop-Up
+**Think of it as:** The big red emergency siren on the patient's screen.
+
+When a patient receives an ambulance notification while the app is open, this dialog appears:
+- **Full-screen red gradient** dialog covering 75% of the screen
+- **Pulsing ambulance icon** animation (hospital cross that beats like a heart)
+- Shows "EMERGENCY ALERT" header, "Ambulance Approaching!", and the **vehicle number**
+- Has two buttons:
+  - **"I'M AWARE"** (white, prominent) → sends `AWARE` acknowledgment
+  - **"MOVING ASIDE"** (outlined, secondary) → sends `MOVING_ASIDE` acknowledgment
+- Non-dismissible by tapping outside (must press a button)
+
+Pressing either button calls `onAcknowledge`, which triggers the API call and closes the dialog.
+
+**Interacts with:** Called from [main.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart).
+
+---
+
+#### [lib/widgets/notification_alert_dialog.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/notification_alert_dialog.dart) — Generic Notification Pop-Up
+**Think of it as:** A simpler alert for non-ambulance notifications.
+
+Similar emergency-styled red dialog but for general notifications. Shows a pulsing warning bell icon, title, body message, and a single **"DISMISS"** button. This dialog is dismissible by tapping outside.
+
+**Interacts with:** Called from [main.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart).
+
+---
+
+### Core & Setup
+
+#### [lib/main.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart) — The App Entry Point & Notification Wirer
+**Think of it as:** The control room — starts everything and connects all the notification wires.
+
+On app start:
+1. Initializes Firebase
+2. If a patient is already logged in → initializes [NotificationService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart#187-676) with their patient ID
+3. Sets up three callbacks on [NotificationService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart#187-676):
+   - **Generic notification received** → shows [NotificationAlertDialog](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/notification_alert_dialog.dart#5-185)
+   - **Ambulance alert received** → shows [AmbulanceAlertDialog](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/ambulance_alert_dialog.dart#16-266)
+   - **Acknowledgment from notification button** → shows a green snackbar confirmation
+4. Handles deep links (e.g., `medicalapp://emergency?patient_id=123`) to open emergency screens
+5. Routes user to home screen (if logged in) or login screen
+
+The [_handleAmbulanceAcknowledgment](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart#105-127) function here is what actually calls `NotificationApiService.acknowledgeNotification()` when the user presses a button in the dialog.
+
+**Interacts with:** [NotificationService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart#187-676), [NotificationApiService](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart#5-150), [AmbulanceAlertDialog](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/ambulance_alert_dialog.dart#16-266), [NotificationAlertDialog](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/notification_alert_dialog.dart#5-185), `AppTheme`.
+
+---
+
+#### `lib/firebase_options.dart` — Firebase Configuration
+**Think of it as:** The app's identity card for Google's Firebase service.
+
+Auto-generated by FlutterFire CLI. Contains platform-specific Firebase config (API keys, project IDs, app IDs) for Android and iOS. Used only in [main.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart) when calling `Firebase.initializeApp()`.
+
+---
+
+#### `lib/core/app_theme.dart` & `lib/core/app_colors.dart` — Visual Style
+**Think of it as:** The design rulebook — colors, fonts, button styles.
+
+Defines the global theme used throughout the app. Your alert dialogs inherit the red emergency color scheme. These files are shared across the whole project.
+
+---
+
+## 🔗 4. Backend ↔ Frontend Interaction
+
+Here's how the two sides talk to each other:
+
+```
+MOBILE APP (Flutter)  ←→  BACKEND (Flask/Python) ←→ DATABASE (SQLite/Postgres)
+                                    ↕
+                           Firebase Admin SDK
+                                    ↕
+                          Firebase Cloud Messaging
+                                    ↕
+                          Patient Devices (push notifications)
+```
+
+### The Communication Technology
+
+| Technology | Used For |
+|---|---|
+| **HTTP REST API** | All CRUD operations (register, login, create trip, acknowledge, etc.) |
+| **Firebase Cloud Messaging (FCM)** | Push notifications sent **from backend → Firebase → patient phones** |
+| **MQTT** | Real-time GPS location broadcast **from driver's phone → MQTT Broker → patient's app** |
+
+### Key Interaction Flows
+
+**Flow 1 — Driver Registration/Login:**
+```
+DriverService.register() → POST /auth/driver/register → Backend creates Driver record → Returns driver data
+DriverService.login()    → POST /auth/driver/login    → Backend verifies password   → Returns driver data
+```
+
+**Flow 2 — Starting a Trip (Driver):**
+```
+AmbulanceNavigationService.createNavigation() → POST /ambulance-navigation → DB saves trip → Returns navigation ID
+LocationPublisherService.startPublishing(navigationId) → Connects MQTT, starts GPS stream
+PushNotificationSenderService.sendAmbulanceArrivingNotification() → POST /notifications/send-all
+  → Backend fetches all patient FCM tokens from DB
+  → Backend calls Firebase Admin SDK
+  → Firebase sends push notification to all patient phones
+```
+
+**Flow 3 — Patient Receives Notification:**
+```
+Firebase → Patient's Phone (FCM push notification)
+NotificationService detects AMBULANCE_ALERT type
+  → Foreground: triggers onAmbulanceAlertReceived callback
+  → Background: shows local notification with action buttons
+main.dart receives the callback → shows AmbulanceAlertDialog
+```
+
+**Flow 4 — Patient Acknowledges:**
+```
+Patient presses "I'M AWARE" button in the dialog
+AmbulanceAlertDialog.onAcknowledge(AWARE) → main.dart._handleAmbulanceAcknowledgment()
+  → NotificationApiService.acknowledgeNotification(navigationId, patientId, 'AWARE')
+  → POST /notifications/acknowledge
+  → Backend saves NotificationAcknowledgment record in DB
+```
+
+---
+
+## 🗺️ 5. File Interaction Map — The Full Story
+
+Here's the complete flow as a storyline:
+
+```
+DRIVER SIDE
+───────────
+[Driver opens app]
+        ↓
+[DriverService.login()] → [ApiClient] → [Backend: /auth/driver/login]
+                                              ↓
+                                    [models.py: Driver table]
+        ↓
+[Driver sets route & taps "Start Journey"]
+        ↓
+[AmbulanceNavigationService.createNavigation()]
+        → [ApiClient] → [Backend: /ambulance-navigation]
+                          → [models.py: AmbulanceNavigation table]
+                          → Returns { navigation_id: 12, status: STARTED }
+        ↓
+[LocationPublisherService.startPublishing(12)]
+        → [MqttService.connect()] → test.mosquitto.org
+        → Publishes "ADD:12,ABC-001,..." to "ambulance/active"
+        → Every 10m: publishes "6.927,79.861" to "ambulance/location/12"
+        ↓
+[PushNotificationSenderService.sendAmbulanceArrivingNotification()]
+        → [ApiClient] → [Backend: /notifications/send-all]
+                          → [models.py: Gets all Patient FCM tokens]
+                          → [Firebase Admin SDK]
+                                    ↓
+                           ╔════════════════════╗
+                           ║  FIREBASE SERVERS  ║
+                           ╚════════════════════╝
+                                    ↓
+PATIENT SIDE
+────────────
+[Firebase delivers push notification to patient's phone]
+        ↓
+[NotificationService detects AMBULANCE_ALERT type]
+  → If foreground: fires onAmbulanceAlertReceived callback
+  → If background: shows system notification with buttons
+        ↓
+[main.dart._showAmbulanceAlert()]
+        → [AmbulanceAlertDialog.show()]
+              → Big red screen: "Ambulance Approaching! Vehicle ABC-001"
+              → Buttons: [I'M AWARE]  [MOVING ASIDE]
+        ↓
+[Patient presses "I'M AWARE"]
+        ↓
+[AmbulanceAlertDialog.onAcknowledge(AWARE)]
+        ↓
+[main.dart._handleAmbulanceAcknowledgment()]
+        ↓
+[NotificationApiService.acknowledgeNotification(12, patient_id, 'AWARE')]
+        → [ApiClient] → [Backend: POST /notifications/acknowledge]
+                          → [models.py: Creates NotificationAcknowledgment record]
+                          → { success: true, acknowledgment_type: "AWARE" }
+        ↓
+[Snackbar: "Thank you for acknowledging the ambulance alert."]
+```
+
+---
+
+## 🧩 My Files Quick Reference Summary
+
+| File | Layer | Purpose |
+|---|---|---|
+| [models/models.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/models/models.py) | Backend | Database table definitions |
+| [routes/auth.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/auth.py) | Backend | Driver register & login |
+| [routes/driver.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/driver.py) | Backend | Driver CRUD (view/update/delete) |
+| [routes/ambulance_navigation.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/ambulance_navigation.py) | Backend | Trip CRUD + status updates |
+| [routes/notification.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/routes/notification.py) | Backend | Send FCM notifications & record acknowledgments |
+| [api.py](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Backend/api.py) | Backend | Server startup + blueprint registration |
+| `serviceAccountKey.json` | Backend | Firebase admin credentials |
+| [driver_model.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/driver_model.dart) | Frontend | Driver data structure |
+| [ambulance_navigation_model.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/models/ambulance_navigation_model.dart) | Frontend | Trip + GPS data structure |
+| [api_client.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/api_client.dart) | Frontend | HTTP connection to backend |
+| [driver_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/driver_service.dart) | Frontend | Driver API calls |
+| [ambulance_navigation_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/ambulance_navigation_service.dart) | Frontend | Trip API calls |
+| [mqtt_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/mqtt_service.dart) | Frontend | Real-time MQTT messaging |
+| [location_publisher_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/location_publisher_service.dart) | Frontend | Driver GPS broadcasting |
+| [notification_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_service.dart) | Frontend | Firebase push notification receiver (patient) |
+| [notification_api_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/notification_api_service.dart) | Frontend | Acknowledgment + alert API calls |
+| [push_notification_sender_service.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/push_notification_sender_service.dart) | Frontend | Send notifications (driver side) |
+| [services.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/services/services.dart) | Frontend | Central export hub |
+| [ambulance_alert_dialog.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/ambulance_alert_dialog.dart) | Frontend | Emergency red dialog with action buttons |
+| [notification_alert_dialog.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/widgets/notification_alert_dialog.dart) | Frontend | Generic notification dialog |
+| [main.dart](file:///d:/2025/RP/Ambulance_Project_25-26J-215/Frontend/lib/main.dart) | Frontend | App entry point + notification wiring |
+| `firebase_options.dart` | Frontend | Firebase configuration |
+| `app_theme.dart` / `app_colors.dart` | Frontend | Shared visual styling |
