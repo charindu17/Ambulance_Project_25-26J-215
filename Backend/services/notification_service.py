@@ -22,7 +22,7 @@ class NotificationService:
     def __init__(self):
         _initialize_firebase()
 
-    def send_to_token(self, token: str, title: str, body: str, data: dict = None) -> dict:
+    def send_to_token(self, token: str, title: str, body: str, data: dict = None, data_only: bool = False) -> dict:
         """
         Send notification to a specific device token.
 
@@ -31,26 +31,33 @@ class NotificationService:
             title: Notification title
             body: Notification body
             data: Optional data payload
+            data_only: If True, sends only a data payload (no OS-level notification)
 
         Returns:
             dict with success status and message_id or error
         """
         try:
-            message = messaging.Message(
-                notification=messaging.Notification(
-                    title=title,
-                    body=body,
-                ),
-                data=data or {},
-                token=token,
-            )
+            if data_only:
+                message = messaging.Message(
+                    data=data or {},
+                    token=token,
+                )
+            else:
+                message = messaging.Message(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body,
+                    ),
+                    data=data or {},
+                    token=token,
+                )
 
             response = messaging.send(message)
             return {'success': True, 'message_id': response}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    def send_to_multiple_tokens(self, tokens: list, title: str, body: str, data: dict = None) -> dict:
+    def send_to_multiple_tokens(self, tokens: list, title: str, body: str, data: dict = None, data_only: bool = False) -> dict:
         """
         Send notification to multiple device tokens.
 
@@ -59,6 +66,7 @@ class NotificationService:
             title: Notification title
             body: Notification body
             data: Optional data payload
+            data_only: If True, sends only a data payload (no OS-level notification)
 
         Returns:
             dict with success count, failure count, and responses
@@ -67,14 +75,20 @@ class NotificationService:
             return {'success': True, 'success_count': 0, 'failure_count': 0, 'responses': []}
 
         try:
-            message = messaging.MulticastMessage(
-                notification=messaging.Notification(
-                    title=title,
-                    body=body,
-                ),
-                data=data or {},
-                tokens=tokens,
-            )
+            if data_only:
+                message = messaging.MulticastMessage(
+                    data=data or {},
+                    tokens=tokens,
+                )
+            else:
+                message = messaging.MulticastMessage(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body,
+                    ),
+                    data=data or {},
+                    tokens=tokens,
+                )
 
             response = messaging.send_each_for_multicast(message)
 
