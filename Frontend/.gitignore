@@ -1,0 +1,107 @@
+# ─── Flutter / Dart / Pub ─────────────────────────────────────────────────────
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+.packages
+/build/
+/coverage/
+
+# ─── Generated Files ──────────────────────────────────────────────────────────
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+
+# ─── Firebase ─────────────────────────────────────────────────────────────────
+# google-services.json contains API keys — keep it secret.
+# If using FlutterFire CLI, keep the generated firebase_options.dart instead.
+# Uncomment the line below only if you are NOT using it in your repo:
+# google-services.json
+# GoogleService-Info.plist
+
+# ─── Symbolication ────────────────────────────────────────────────────────────
+app.*.symbols
+
+# ─── Obfuscation ──────────────────────────────────────────────────────────────
+app.*.map.json
+
+# ─── VS Code ──────────────────────────────────────────────────────────────────
+# Launch configs are often useful to share; uncomment to ignore entirely.
+.vscode/launch.json
+.vscode/settings.json
+
+# ─── IntelliJ / Android Studio ───────────────────────────────────────────────
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# ─── Miscellaneous ────────────────────────────────────────────────────────────
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── Android ──────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Gradle caches & wrappers
+/android/.gradle/
+/android/.idea/
+/android/.kotlin/
+/android/captures/
+/android/build/
+/android/app/build/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Sensitive local properties (SDK path, signing info)
+/android/local.properties
+
+# Generated plugin registrant
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+GeneratedPluginRegistrant.java
+
+# NDK build caches
+.cxx/
+
+# Signing — NEVER commit keystores or key config!
+**/key.properties
+**/*.keystore
+**/*.jks
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── iOS / macOS ──────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+**/ios/Flutter/.last_build_id
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/ios/Pods/
+**/macos/Pods/
+Podfile.lock
+
+# Xcode derived data & archives
+**/DerivedData/
+**/*.xcworkspace/xcuserdata
+**/*.xcodeproj/xcuserdata
+**/*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ─── Linux / Windows Desktop ─────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+/linux/flutter/ephemeral/
+/windows/flutter/ephemeral/
+
+# ─── OS Artifacts ─────────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+desktop.ini
