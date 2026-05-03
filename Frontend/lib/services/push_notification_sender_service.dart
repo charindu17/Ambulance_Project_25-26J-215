@@ -9,11 +9,13 @@ class PushNotificationSenderService {
       : _client = client ?? ApiClient();
 
   /// Send notification to specific patients by their IDs.
+  /// [dataOnly] — if true, sends only a data payload (no OS-level notification banner).
   Future<bool> sendToPatients({
     required List<int> patientIds,
     required String title,
     required String body,
     Map<String, dynamic>? data,
+    bool dataOnly = false,
   }) async {
     try {
       final requestBody = {
@@ -21,6 +23,7 @@ class PushNotificationSenderService {
         'title': title,
         'body': body,
         if (data != null) 'data': data,
+        'data_only': dataOnly,
       };
 
       final response = await _client.post(
@@ -46,12 +49,14 @@ class PushNotificationSenderService {
     required String title,
     required String body,
     Map<String, dynamic>? data,
+    bool dataOnly = false,
   }) async {
     try {
       final requestBody = {
         'title': title,
         'body': body,
         if (data != null) 'data': data,
+        'data_only': dataOnly,
       };
 
       final response = await _client.post(
@@ -73,23 +78,33 @@ class PushNotificationSenderService {
   }
 
   /// Send ambulance arriving notification to all patients.
+  /// Uses type AMBULANCE_ALERT and dataOnly so the patient foreground
+  /// handler shows the with-buttons Notification A without an OS duplicate.
   Future<bool> sendAmbulanceArrivingNotification({
+    required int navigationId,             // needed by _parseAmbulanceAlertData
     String? vehicleNumber,
     String? driverName,
   }) async {
-    final title = 'Ambulance is on the way!';
+    // ── CONTENT: update header & body strings here ──────────────────────────
+    final title = 'Ambulance On The Way';
     final body = vehicleNumber != null
-        ? 'Ambulance $vehicleNumber is now active and heading to destination via your route.'
-        : 'An ambulance is now active and on its way.';
+        ? 'Ambulance $vehicleNumber is now active and heading to the destination'
+        : 'An ambulance is now active and heading to the destination';
+    // ────────────────────────────────────────────────────────────────────────
 
     return sendToAllPatients(
       title: title,
       body: body,
       data: {
-        'type': 'ambulance_arriving',
+        'type': 'AMBULANCE_ALERT',              // triggers with-buttons path
+        'navigation_id': navigationId.toString(), // required by _parseAmbulanceAlertData
+        'title': title,
+        'body': body,
         if (vehicleNumber != null) 'vehicle_number': vehicleNumber,
         if (driverName != null) 'driver_name': driverName,
+        'require_acknowledgment': 'true',
       },
+      dataOnly: true,                           // no OS-level duplicate banner
     );
   }
 }
