@@ -3,6 +3,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_client.dart';
+import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 /// Notification type constants
 class NotificationType {
@@ -219,6 +221,19 @@ class NotificationService {
     enableVibration: true,
   );
 
+  // NEW: dedicated channel for ALARM notifications — plays the default alarm
+  // sound and keeps the screen on so the driver cannot miss it.
+  static const AndroidNotificationChannel _alarmChannel = AndroidNotificationChannel(
+    'ambulance_alarm_channel',
+    'Ambulance Alarm',
+    description: 'Urgent alarm for vehicles that have not yielded to an ambulance.',
+    importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
+    // sound: RawResourceAndroidNotificationSound('alarm'), // uncomment and
+    // add res/raw/alarm.mp3 to play a custom alarm sound file
+  );
+
   /// Initialize the notification service.
   /// Call this after Firebase.initializeApp() and after user logs in.
   Future<void> initialize({int? patientId}) async {
@@ -237,8 +252,15 @@ class NotificationService {
       alert: true,
       badge: true,
       sound: true,
+      criticalAlert: true,
       provisional: false,
     );
+
+    // NEW: request exact alarm permission for Android 12+ (API 31+)
+    if (Platform.isAndroid) {
+      final status = await Permission.scheduleExactAlarm.request();
+      debugPrint('Exact alarm permission: $status');
+    }
 
     debugPrint('Notification permission status: ${settings.authorizationStatus}');
 
@@ -334,6 +356,7 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>();
     await androidImplementation?.createNotificationChannel(_channel);
     await androidImplementation?.createNotificationChannel(_ambulanceChannel);
+    await androidImplementation?.createNotificationChannel(_alarmChannel); // NEW
   }
 
   /// Handle foreground notification response (tap or action button)
@@ -544,6 +567,84 @@ class NotificationService {
     );
   }
 
+  /// NEW: Show an ALARM notification for vehicles that have NOT yielded.
+  ///
+  /// This is triggered when the ML model predicts the vehicle is still
+  /// cruising and has not moved aside for the approaching ambulance.
+  /// Uses the dedicated alarm channel which plays at maximum volume.
+  ///
+  /// The [alertType] field in the FCM data payload is set to 'ALARM' by
+  /// the backend scheduler and by test_screen.dart so this method knows
+  /// when to call itself instead of [showAmbulanceAlertNotification].
+  Future<void> showAlarmNotification({
+    required int navigationId,
+    required String vehicleNumber,
+    String? title,
+    String? body,
+  }) async {
+    final payloadData = {
+      'type': NotificationType.ambulanceAlert,
+      'alert_type': 'ALARM',
+      'navigation_id': navigationId.toString(),
+      'vehicle_number': vehicleNumber,
+      if (_currentPatientId != null) 'patient_id': _currentPatientId.toString(),
+    };
+
+    // ── CONTENT (alarm notification on receiver side): update here ────────
+    const androidDetails = AndroidNotificationDetails(
+      'ambulance_alarm_channel',       // uses the new alarm channel
+      'Ambulance Alarm',
+      channelDescription:
+          'Urgent alarm for vehicles that have not yielded to an ambulance.',
+      importance: Importance.max,
+      priority: Priority.max,
+      icon: '@mipmap/ic_launcher',
+      fullScreenIntent: true,          // wakes screen even when locked
+      category: AndroidNotificationCategory.alarm,
+      playSound: true,
+      enableVibration: true,
+      // sound: RawResourceAndroidNotificationSound('alarm'), // custom alarm mp3
+      actions: [
+        AndroidNotificationAction(
+          NotificationActionId.imAware,
+          "I'm Aware",
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          NotificationActionId.movingAside,
+          'Moving Aside',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
+    );
+    // ─────────────────────────────────────────────────────────────────────
+
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.critical,
+      categoryIdentifier: 'ambulance_alert_category',
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: darwinDetails,
+    );
+
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title ?? '🚨 Ambulance Alert!',
+      body ?? 'URGENT: Please move aside immediately for ambulance $vehicleNumber.',
+      details,
+      payload: jsonEncode(payloadData),
+    );
+
+    debugPrint('[NotificationService] ALARM notification shown for nav $navigationId');
+  }
+
   /// Save FCM token to backend for a specific patient.
   Future<bool> saveTokenToBackend(int patientId) async {
     if (_fcmToken == null) return false;
@@ -577,6 +678,18 @@ class NotificationService {
       final alertData = _parseAmbulanceAlertData(message);
       if (alertData != null) {
         debugPrint('Ambulance alert received: ${alertData.vehicleNumber}');
+
+        // NEW: if the backend flagged this as ALARM, show the loud alarm
+        // notification instead of the standard one.
+        final alertType = message.data['alert_type'];
+        if (alertType == 'ALARM') {
+          await showAlarmNotification(
+            navigationId: alertData.navigationId,
+            vehicleNumber: alertData.vehicleNumber,
+          );
+          return;
+        }
+
         // Trigger ambulance alert callback instead of generic notification
         _onAmbulanceAlertReceived?.call(
           message.notification?.title ?? 'Ambulance Approaching!',
