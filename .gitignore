@@ -1,8 +1,17 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
+assets/
 node_modules/
-
+Model training/Testing datasets
+Model training/10min- 1.csv
+Model training/10min- 2.csv
+Model training/10min- 3.csv
+Model training/13min.csv
+Model training/18min- 1.csv
+Model training/18min- 2.csv
+Model training/AmbulanceDataCollector.zip
+Model training/Testing datasets.zip
 # Expo
 .expo/
 dist/
@@ -41,3 +50,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+#virtual env
+.venv/
+
+Backend/instance/database.models
