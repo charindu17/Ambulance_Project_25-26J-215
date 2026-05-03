@@ -30,6 +30,8 @@ def send_notification_to_users():
         body = data.get('body')
         extra_data = data.get('data', {})
 
+        data_only = data.get('data_only', False)
+
         if not patient_ids or not isinstance(patient_ids, list):
             return jsonify({'error': 'patient_ids is required and must be a list'}), 400
         if not title:
@@ -56,7 +58,8 @@ def send_notification_to_users():
             tokens=tokens,
             title=title,
             body=body,
-            data=extra_data
+            data=extra_data,
+            data_only=data_only
         )
 
         if not result['success']:
@@ -97,6 +100,8 @@ def send_notification_to_all():
         body = data.get('body')
         extra_data = data.get('data', {})
 
+        data_only = data.get('data_only', False) # <---- ADDED THIS LINE
+
         if not title:
             return jsonify({'error': 'title is required'}), 400
         if not body:
@@ -115,7 +120,8 @@ def send_notification_to_all():
             tokens=tokens,
             title=title,
             body=body,
-            data=extra_data
+            data=extra_data,
+            data_only=data_only
         )
 
         if not result['success']:
