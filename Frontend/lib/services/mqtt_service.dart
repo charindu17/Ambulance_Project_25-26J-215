@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
 /// Singleton MQTT service for real-time ambulance location tracking.
 /// Connects to public test.mosquitto.org broker (suitable for university project).
 class MqttService {
-  static const String _broker = 'test.mosquitto.org';
+  static const String _broker = 'broker.hivemq.com';
   static const int _port = 1883;
   static const int _keepAlivePeriod = 20;
 
@@ -23,9 +24,16 @@ class MqttService {
   Stream<bool> get connectionStream => _connectionController.stream;
 
   Future<bool> connect() async {
-    if (_isConnected && _client != null) return true;
+    debugPrint('[MQTT] connect() called — _isConnected=$_isConnected, client=${_client != null ? "exists(state=${_client!.connectionStatus?.state})" : "null"}');
+
+    if (_isConnected && _client != null) {
+      debugPrint('[MQTT] Already connected, returning true');
+      return true;
+    }
 
     final clientId = 'flutter_ambulance_${DateTime.now().millisecondsSinceEpoch}';
+    debugPrint('[MQTT] Connecting to $_broker:$_port  clientId=$clientId');
+
     _client = MqttServerClient(_broker, clientId);
     _client!.port = _port;
     _client!.keepAlivePeriod = _keepAlivePeriod;
@@ -47,35 +55,47 @@ class MqttService {
 
     try {
       await _client!.connect();
-      return _client!.connectionStatus!.state == MqttConnectionState.connected;
-    } on NoConnectionException catch (_) {
+      final state = _client!.connectionStatus!.state;
+      final returnCode = _client!.connectionStatus!.returnCode;
+      debugPrint('[MQTT] connect() completed — state=$state  returnCode=$returnCode');
+      final result = state == MqttConnectionState.connected;
+      debugPrint('[MQTT] returning $result');
+      return result;
+    } on NoConnectionException catch (e) {
+      debugPrint('[MQTT] NoConnectionException: $e');
       _client?.disconnect();
       return false;
-    } on SocketException catch (_) {
+    } on SocketException catch (e) {
+      debugPrint('[MQTT] SocketException: message="${e.message}"  address=${e.address}  port=${e.port}  osError=${e.osError}');
       _client?.disconnect();
       return false;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[MQTT] Unexpected exception: $e\n$st');
       _client?.disconnect();
       return false;
     }
   }
 
   void _onConnected() {
+    debugPrint('[MQTT] _onConnected callback fired');
     _isConnected = true;
     _connectionController.add(true);
   }
 
   void _onDisconnected() {
+    debugPrint('[MQTT] _onDisconnected callback fired — returnCode=${_client?.connectionStatus?.returnCode}');
     _isConnected = false;
     _connectionController.add(false);
   }
 
   void _onAutoReconnect() {
+    debugPrint('[MQTT] _onAutoReconnect callback fired');
     _isConnected = false;
     _connectionController.add(false);
   }
 
   void _onAutoReconnected() {
+    debugPrint('[MQTT] _onAutoReconnected callback fired');
     _isConnected = true;
     _connectionController.add(true);
   }
@@ -91,7 +111,9 @@ class MqttService {
 
   /// Subscribe to a topic and return a stream of messages.
   Stream<String> subscribe(String topic) {
+    debugPrint('[MQTT] subscribe("$topic") — _isConnected=$_isConnected  client=${_client != null ? "exists" : "null"}');
     if (!_isConnected || _client == null) {
+      debugPrint('[MQTT] subscribe() returning empty stream (not connected)');
       return const Stream.empty();
     }
 
