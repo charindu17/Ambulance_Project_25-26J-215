@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 
 # Load the trained model once at startup
-model = joblib.load("./ml_models/ambulance_model.pkl")
+model = joblib.load("./ml_models/ambulance_model_tuned.pkl")
 
 FEATURE_ORDER = [
     "avg_speed",
