@@ -3,11 +3,6 @@ from services.notification_service import NotificationService
 from datetime import datetime
 import requests  # NEW: to call our own prediction endpoint
 
-# ── NEW: prediction endpoint (same backend, loopback call) ─────────────────
-# Since the ML model is served via /prediction/predict on this same backend,
-# the scheduler calls it internally to decide alarm vs. normal notification
-# for each patient vehicle. This mirrors what the Flutter SensorService does
-# on the device side, making the logic consistent end-to-end.
 PREDICTION_ENDPOINT = "http://localhost:5001/prediction/predict"
 
 # Feature order must match FEATURE_ORDER in ambulance_navigation_route.py
@@ -23,17 +18,6 @@ FEATURE_ORDER = [
 
 
 def _get_latest_sensor_features(patient_id: int) -> dict | None:
-    """
-    Retrieve the most recent sensor feature window for a patient vehicle.
-
-    In a production deployment these features would be written to the database
-    by the patient's app (via a dedicated /sensor-data endpoint) every few
-    seconds. For this showcase the function queries the patient record for
-    any stored sensor snapshot. If none is present it returns None and the
-    caller falls back to sending the normal notification.
-
-    Returns a dict with the 7 feature keys or None.
-    """
     try:
         from models.models import PatientSensorSnapshot  # imported lazily to avoid circular imports
         snapshot = (
@@ -59,12 +43,6 @@ def _get_latest_sensor_features(patient_id: int) -> dict | None:
 
 
 def _predict_driving_behaviour(features: dict) -> str | None:
-    """
-    Call the backend Random Forest prediction endpoint with the supplied
-    feature window and return the predicted label (e.g. 'Cruising').
-
-    Returns None on any error so the caller can fall back gracefully.
-    """
     try:
         resp = requests.post(
             PREDICTION_ENDPOINT,
@@ -85,11 +63,6 @@ def _predict_driving_behaviour(features: dict) -> str | None:
 
 
 def _is_not_yielding(prediction_label: str | None) -> bool:
-    """
-    Returns True when the model predicts the vehicle is still cruising,
-    meaning it has not yet slowed down or moved aside for the ambulance.
-    These vehicles should receive the ALARM notification.
-    """
     return prediction_label == "Cruising"
 
 
@@ -131,16 +104,15 @@ def send_active_navigation_notifications(app):
                 vehicle_number = navigation.vehicle_number or "Unknown"
 
                 for patient in patients:
-                    # ── NEW: per-patient prediction logic ─────────────────
+                    # NEW: per-patient prediction logic 
                     features = _get_latest_sensor_features(patient.id)
                     prediction = _predict_driving_behaviour(features) \
                         if features else None
                     alarm = _is_not_yielding(prediction)
-                    # ──────────────────────────────────────────────────────
 
                     if alarm:
                         # Vehicle has NOT yielded → send ALARM notification
-                        # ── CONTENT (scheduler alarm notification): update header & body here ──
+                        # CONTENT (scheduler alarm notification): update header & body here 
                         title = "🚨 Ambulance On The Way!"
                         body = (
                             f"URGENT: Ambulance {vehicle_number} is approaching. "
@@ -156,7 +128,7 @@ def send_active_navigation_notifications(app):
                         }
                     else:
                         # Vehicle already yielded / no data → normal notification
-                        # ── CONTENT (scheduler normal notification): update header & body here ──
+                        # CONTENT (scheduler normal notification): update header & body here 
                         title = "Ambulance On The Way!"
                         body = (
                             f"Ambulance {vehicle_number} is now active and "
